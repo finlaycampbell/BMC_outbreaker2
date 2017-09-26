@@ -390,7 +390,7 @@ mk.summary <- function(store = NULL, r) {
 
     store <- list(acc = data.frame(o2mod = numeric(),
                                    trans = numeric(),
-                                   o2 = numeric())
+                                   o2 = numeric()),
                   simil = data.frame(o2mod = numeric(),
                                      o2 = numeric()),
                   times = data.frame(o2mod = numeric(),
