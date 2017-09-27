@@ -130,8 +130,8 @@ run.o2mod <- function(sim) {
                           dna = as.DNAbin(matrix('A', nsam, 1)))
   data$ptree <- ptreeFromPhylo(phy, max(dates))
   data$neg <- sim$w.mean
-  config <- list(n_iter = 1e3,
-                 sample_every = 5)
+  config <- list(n_iter = 1e4,
+                 sample_every = 50)
   res <- o2mod.transphylo(data, config)
 
 }
@@ -156,8 +156,8 @@ run.trans <- function(sim) {
   res <- inferTTree(ptree, w.shape = sim$shape, w.scale = sim$scale*50,
                     startPi = 1, updatePi = F, startNeg = sim$w.mean*50,
                     updateNeg = F, startOff.r = 1.8, updateOff.r = F,
-                    startOff.p = 0.5, updateOff.p = F, thinning = 50,
-                    mcmcIterations = 1e4, dateT = Inf)
+                    startOff.p = 0.5, updateOff.p = F, thinning = 500,
+                    mcmcIterations = 1e5, dateT = Inf)
 
   return(res)
 
@@ -170,8 +170,8 @@ run.o2 <- function(sim) {
   dna <- as.DNAbin(sim$sequences)
   rownames(dna) <- seq_len(nrow(dna))
   data <- outbreaker_data(dates = dates, w_dens = sim$w, dna = dna)
-  config <- list(n_iter = 1e3,
-                 sample_every = 5)
+  config <- list(n_iter = 1e4,
+                 sample_every = 50)
   res <- outbreaker2::outbreaker(data, config)
 
 }
@@ -346,10 +346,10 @@ run.analysis <- function(runs, size) {
 }
 
 
-##===== Result collection =====#
+##===== Result collection =====##
 
 ## Add loaded objects to store
-create.store <- function(obj, bundle.name, dir, load, dl, store = NULL) {
+create.store <- function(obj, bundle.name, dir, load = T, dl = F, store = NULL) {
 
   files <- list.files(dir)
   rem <- grep("store", files)
@@ -379,6 +379,12 @@ create.store <- function(obj, bundle.name, dir, load, dl, store = NULL) {
     }
   }
 
+  store$acc <- store$acc[to.keep,]
+  store$simil <- store$simil[to.keep,]
+  store$times <- store$times[to.keep,]
+
+  rownames(store$acc) <- rownames(store$simil) <- rownames(store$times) <- NULL
+  
   return(store)
 
 }
@@ -427,14 +433,15 @@ load.ifile <- function(dir, i = 1) {
 ## Provides a label for facetting
 create.flab <- function() {
   as_labeller(c(o2mod = 'o2mod.TransPhylo',
-                trans = 'TransPhylo'))
+                trans = 'TransPhylo',
+                o2 = 'Default outbreaker2'))
 }
 
 ## Axis labels
 create.axlab <- function(a) {
 
   def <- list(acc = 'Accuracy of outbreak reconstruction',
-              simil = 'Proportion of identical ancestry assignments',
+              simil = 'Similarity of consensus tree to TransPhylo',
               diff = 'Difference in accuracy of outbreak reconstruction')
   def[[a]]
 
@@ -465,15 +472,16 @@ vis.dens <- function(store) {
 vis.rel <- function(store) {
 
   df <- store$acc %>%
-    arrange(trans, diff) %>%
+    select(-trans) %>%
+    mutate(diff = o2mod - o2) %>%
+    arrange(o2, diff) %>%
     mutate(i = seq_along(diff))
-           #o2mod = o2mod - trans,
-           #trans = 0)
 
-  df2 <- gather(df, mod, acc, -diff, -i, -simil)
+
+  df2 <- gather(df, mod, acc, -diff, -i)
 
   ggplot(df) +
-    geom_segment(aes(x = i, y = trans, xend = i, yend = o2mod, colour = diff), size = 1) +
+    geom_segment(aes(x = i, y = o2, xend = i, yend = o2mod, colour = diff), size = 1) +
     geom_point(data = df2, aes(i, acc, fill = mod), shape = 21, size = 1.5) +
     create.theme() +
     scale_color_viridis(guide = 'none') +
@@ -507,8 +515,8 @@ vis.anc <- function(o2mod.res, trans.res, burnin = 0.1, nbreaks = 10) {
                                     round(max(df$from)/nbreaks, 0))) +
     create.theme() +
     theme(strip.text.y = element_text(colour = "black"),
-          strip.background = element_rect(colour = "darkgrey", fill = "grey90"),
-          panel.grid.minor = element_blank())
+          strip.background = element_rect(colour = "darkgrey", fill = "grey90"))#,
+#          panel.grid.minor = element_blank())
 
 }
 
@@ -553,6 +561,59 @@ vis.chains <- function(o2mod.res, trans.res, burnin = 1, burnend = length(o2mod.
 
 }
 
+## Visualise similarity to
+vis.simil <- function(store) {
+  
+  df <- store$simil %>%
+    arrange(o2mod) %>%
+    mutate(i = seq_along(diff))
+  
+  df2 <- gather(df, mod, simil, -diff, -i)
+
+  df2$mod <- factor(df2$mod, levels = c('o2mod', 'o2'))
+  
+  ggplot(df) +
+    geom_segment(aes(x = i, y = o2, xend = i, yend = o2mod, colour = -diff), size = 1) +
+    geom_point(data = df2, aes(i, simil, fill = mod), shape = 21, size = 1.5) +
+    create.theme() +
+    scale_color_viridis(guide = 'none', option = 'D') +
+    scale_fill_manual(values = c('black', 'white'),
+                      labels = create.flab(),
+                      name = NULL) +
+    labs(y = create.axlab('simil'),
+         x = 'Reconstructed outbreak') +
+    theme(legend.position = 'bottom',
+          legend.direction = 'horizontal') +
+    ylim(0, 1)
+  
+}
+
+## Visualise accuracy of outbreak reconstruction
+vis.acc <- function(store) {
+
+  store$acc %>%
+    select(-diff) %>%
+    gather(mod, acc) %>%
+    ggplot(aes(acc, fill = mod)) +
+    scale_fill_discrete(name = 'Model', labels = create.flab()) +
+    geom_density(alpha = 0.5, adjust = 1.5) +
+    labs(x = create.axlab('acc'), y = 'Density') +
+    xlim(0, 1) +
+    create.theme()
+
+}
+
+## Change in similarity to TransPhylo
+vis.delta.simil <- function(store) {
+
+  store$simil %>%
+    mutate(diff = o2mod - o2) %>%
+    ggplot(aes(diff)) +
+    geom_histogram(binwidth = 0.1, colour = 'black') +
+    create.theme()
+
+}
+
 ## Save plots to ob2/figs directory
 vis.save <- function(p, name, ext = 'svg', dpi = 500,
                      width = 10, height = 10, ...) {
@@ -566,15 +627,12 @@ vis.save <- function(p, name, ext = 'svg', dpi = 500,
 vis.update <- function() {
 
   p1 <- vis.chains(chains$o2mod.res[[1]], chains$trans.res[[1]])
-  vis.save(p1, 'chains', 'png', width = 10, height = 10)
+  vis.save(p1, 'outbreaker2_figure_1', 'png', width = 10, height = 10)
 
   p2 <- vis.anc(ances$o2mod.res[[1]], ances$trans.res[[1]])
-  vis.save(p2, 'ances', 'png', width = 10, height = 10)
+  vis.save(p2, 'outbreaker2_figure_2', 'png', width = 10, height = 10)
 
-  p3 <- vis.rel(store)
-  vis.save(p3, 'rel', 'png', width = 15, height = 10, dpi = 200)
-
-  #3 <- gridExtra::grid.arrange(p1, p2, ncol = 2)
-  #is.save(p3, 'join', 'png', width = 20, height = 10, dpi = 500)
+  p3 <- vis.simil(store)
+  vis.save(p3, 'outbreaker2_figure_3', 'png', width = 10, height = 10*2/3)
 
 }
