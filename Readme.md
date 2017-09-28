@@ -1,4 +1,4 @@
-# outbreaker2: a customisable tool for outbreak reconstruction
+# outbreaker2: a modular platform for outbreak reconstruction
 
 This repository provides the methodology and data accompanying the manuscript
 'outbreaker2: a customisable tool for outbreak reconstruction' submitted to BMC
