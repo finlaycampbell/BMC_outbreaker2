@@ -328,7 +328,7 @@ get.o2.simil <- function(res1, res2) {
 }
 
 ## Runs o2.mod / transphylo on the cluster
-run.cluster <- function(runs, size) {
+run.analysis <- function(runs, size) {
 
   store <- list()
   store$sim <- store$o2mod.res <- store$trans.res <- store$o2.res <- list()
@@ -398,7 +398,7 @@ create.store <- function(obj, bundle.name, dir, load = T, dl = F, store = NULL) 
     for(i in seq_along(files)) {
       setTxtProgressBar(pb, i)
       load(paste0(dir, files[i]))
-      store <- add_r(store, r)
+      store <- mk.summary(store, r)
     }
   }
 
@@ -412,7 +412,7 @@ create.store <- function(obj, bundle.name, dir, load = T, dl = F, store = NULL) 
       task <- obj$task_get(ids[i])
       r <- task$result()
       save(r, file = paste0(dir, "r.", n.files + i, ".RData"))
-      store <- add_r(store, r)
+      store <- mk.summary(store, r)
     }
   }
 
@@ -427,7 +427,7 @@ create.store <- function(obj, bundle.name, dir, load = T, dl = F, store = NULL) 
 }
 
 ## Add one run object to store
-add_r <- function(store = NULL, r) {
+mk.summary <- function(store = NULL, r) {
 
   if(is.null(store)) {
 

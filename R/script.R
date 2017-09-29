@@ -2,7 +2,7 @@
 source("R/internals.R")
 load("data/ances.RData")
 load("data/chains.RData")
-data("data/to.keep.RData")
+load("data/to.keep.RData")
 install.packages('pkg/outbreaker2_1.0-0.tar.gz',
                  repos = NULL, type = 'source')
 install.packages('pkg/o2mod.transphylo_0.0.0.9000.tar.gz',
@@ -27,7 +27,7 @@ store <- mk.summary(r = analysis)
 
 
 ##===== Or load stored results =====##
-store <- create.store(dir = "data/runs/", load = T, dl = F)
+store <- create.store(dir = "data/runs/")
 
 
 ##===== Visualise plots =====##
