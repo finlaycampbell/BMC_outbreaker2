@@ -119,6 +119,43 @@ run.sim <- function(size) {
 
 }
 
+## Count lines in outbreaker2
+count.lines <- function() {
+
+  df <- data.frame(factor = c('likelihoods', 'priors', 'moves',
+                              'config', 'r_data',  'other'),
+                   R = numeric(length = 6),
+                   cpp = numeric(length = 6),
+                   h = numeric(length = 6),
+                   stringsAsFactors = F)
+
+
+  for(lang in c('R', 'cpp', 'h')) {
+
+    if(lang == 'R') {
+      setwd("~/Dropbox/dev/outbreaker2/R")
+    } else {
+      setwd("~/Dropbox/dev/outbreaker2/src")
+    }
+    
+    for(i in 1:5) {
+      
+      fil <- dir(pattern = paste0(df$factor[[i]], ".", lang))
+      if(length(fil) == 0) next
+      
+      df[[lang]][i] <- sum(sapply(fil, function(i) length(readLines(i))))
+
+    }
+
+    fil <- dir(pattern = paste0(".", lang, "$"))
+    df[[lang]][6] <- sum(sapply(fil, function(i) length(readLines(i)))) - sum(df[[lang]][1:5])
+    
+  }
+
+  return(df)
+
+}
+
 ## Runs o2mod.transphylo on a phybreak sim
 run.o2mod <- function(sim) {
 
@@ -291,7 +328,7 @@ get.o2.simil <- function(res1, res2) {
 }
 
 ## Runs o2.mod / transphylo on the cluster
-run.analysis <- function(runs, size) {
+run.cluster <- function(runs, size) {
 
   store <- list()
   store$sim <- store$o2mod.res <- store$trans.res <- store$o2.res <- list()
@@ -361,7 +398,7 @@ create.store <- function(obj, bundle.name, dir, load = T, dl = F, store = NULL) 
     for(i in seq_along(files)) {
       setTxtProgressBar(pb, i)
       load(paste0(dir, files[i]))
-      store <- mk.summary(store, r)
+      store <- add_r(store, r)
     }
   }
 
@@ -375,7 +412,7 @@ create.store <- function(obj, bundle.name, dir, load = T, dl = F, store = NULL) 
       task <- obj$task_get(ids[i])
       r <- task$result()
       save(r, file = paste0(dir, "r.", n.files + i, ".RData"))
-      store <- mk.summary(store, r)
+      store <- add_r(store, r)
     }
   }
 
@@ -390,7 +427,7 @@ create.store <- function(obj, bundle.name, dir, load = T, dl = F, store = NULL) 
 }
 
 ## Add one run object to store
-mk.summary <- function(store = NULL, r) {
+add_r <- function(store = NULL, r) {
 
   if(is.null(store)) {
 
@@ -502,11 +539,21 @@ vis.anc <- function(o2mod.res, trans.res, burnin = 0.1, nbreaks = 10) {
   df <- rbind(get.o2mod.anc(o2mod.res, burnin),
               get.trans.anc(trans.res, burnin))
 
+  sim <- ances$sim[[1]]
+  to <- seq_along(sim$sample.hosts)
+  from <- sim$sim.infectors
+  from[from == 'index'] <- 'host.0'
+  from <- stringi::stri_extract_all_regex(from, "[0-9]")
+  from <- as.numeric(unlist(plyr::ldply(from, paste, collapse = '')))
+  
+  df2 <- data.frame(from = from, to = to)
+
   ggplot(df) +
     geom_point(aes(x = to, y = from, size = frequency, color = factor(from))) +
+    geom_point(data = df2, aes(x = to, y = from), size = 1.5, shape = 4, colour = 'black', stroke = 1.5) +
     facet_grid(mod ~ ., labeller = create.flab()) +
     scale_size_area(name = 'Posterior\nfrequency') +
-    viridis::scale_color_viridis(discrete = TRUE) +
+#    viridis::scale_color_viridis(discrete = TRUE, option = 'C') +
     guides(colour = FALSE) +
     labs(x = 'Infectee', y = 'Infector') +
     scale_x_continuous(breaks = seq(1, max(df$to),
@@ -566,7 +613,7 @@ vis.simil <- function(store) {
   
   df <- store$simil %>%
     arrange(o2mod) %>%
-    mutate(i = seq_along(diff))
+    mutate(diff = o2mod - o2, i = seq_along(diff))
   
   df2 <- gather(df, mod, simil, -diff, -i)
 
@@ -627,12 +674,12 @@ vis.save <- function(p, name, ext = 'svg', dpi = 500,
 vis.update <- function() {
 
   p1 <- vis.chains(chains$o2mod.res[[1]], chains$trans.res[[1]])
-  vis.save(p1, 'outbreaker2_figure_1', 'png', width = 10, height = 10)
+  vis.save(p1, 'outbreaker2_figure_2', 'pdf', width = 10, height = 10)
 
   p2 <- vis.anc(ances$o2mod.res[[1]], ances$trans.res[[1]])
-  vis.save(p2, 'outbreaker2_figure_2', 'png', width = 10, height = 10)
+  vis.save(p2, 'outbreaker2_figure_3', 'pdf', width = 10, height = 10)
 
   p3 <- vis.simil(store)
-  vis.save(p3, 'outbreaker2_figure_3', 'png', width = 10, height = 10*2/3)
+  vis.save(p3, 'outbreaker2_figure_4', 'pdf', width = 10, height = 10*2/3)
 
 }
